@@ -8,8 +8,7 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - vector_db:/app/vector_db
-      - embeddings_cache:/app/embeddings_cache
+      - app_data:/app/data
     environment:
       - COHERE_API_KEY=${COHERE_API_KEY}
     restart: unless-stopped
@@ -21,7 +20,5 @@ services:
       start_period: 40s
 
 volumes:
-  vector_db:
-    driver: local
-  embeddings_cache:
+  app_data:
     driver: local
