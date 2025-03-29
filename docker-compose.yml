@@ -1,8 +1,6 @@
 services:
-  rag-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     ports:
       - "8501:8501"
     environment:
