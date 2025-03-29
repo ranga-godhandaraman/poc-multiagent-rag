@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  rag-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - vector_db:/app/vector_db
+      - embeddings_cache:/app/embeddings_cache
+    environment:
+      - COHERE_API_KEY=${COHERE_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  vector_db:
+    driver: local
+  embeddings_cache:
+    driver: local
