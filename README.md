@@ -95,7 +95,3 @@ The LangGraph workflow orchestrates the agents in the following sequence:
   - Optimized chunking strategy
   - Query expansion techniques
   - Maximum Marginal Relevance for diverse retrieval
-
-## License
-
-[Specify your license here]
