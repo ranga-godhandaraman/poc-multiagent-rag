@@ -56,21 +56,6 @@ An enhanced Retrieval-Augmented Generation (RAG) system using LangGraph to orche
    - Check for typos in the API key
    - Verify API key has necessary permissions
 
-### Pushing to Docker Hub
-
-Use the provided script to build and push the Docker image to Docker Hub:
-
-```bash
-# Make the script executable
-chmod +x push-to-dockerhub.sh
-
-# Build and push with default tag (latest)
-./push-to-dockerhub.sh
-
-# Build and push with specific tag
-./push-to-dockerhub.sh v1.0
-```
-
 ### Running the Docker Image
 
 ```bash
