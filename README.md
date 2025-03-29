@@ -2,6 +2,85 @@
 
 An enhanced Retrieval-Augmented Generation (RAG) system using LangGraph to orchestrate multiple specialized agents for document processing and question answering.
 
+## Docker Deployment
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Cohere API key
+- Python 3.11 or higher
+
+### Quick Start
+
+1. Create a `.env` file with your Cohere API key:
+   ```
+   COHERE_API_KEY=your_api_key_here
+   ```
+
+2. Build and run the Docker container:
+   ```bash
+   docker build -t ranga2024/poc-multiagent-rag .
+   
+   docker run -d -p 8501:8501 \
+       -v $(pwd)/data:/app/data \
+       -e COHERE_API_KEY=your_api_key_here \
+       ranga2024/poc-multiagent-rag \
+       streamlit run multi_agent_rag.py \
+       --server.address=0.0.0.0 \
+       --server.port=8501 \
+       --server.enableCORS=true \
+       --server.enableWebsocketCompression=false \
+       --server.maxUploadSize=100 \
+       --browser.gatherUsageStats=false
+   ```
+
+3. Access the application at:
+   - http://localhost:8501
+   - http://127.0.0.1:8501
+   - http://172.17.0.2:8501 (container IP)
+
+### Troubleshooting
+
+1. **Port Conflict**
+   - Stop any process using port 8501
+   - Use `docker ps` to find running containers
+   - Stop conflicting containers with `docker stop <container_id>`
+
+2. **Connection Issues**
+   - Verify Docker container is running: `docker ps`
+   - Check container logs: `docker logs <container_id>`
+   - Ensure no firewall blocking port 8501
+
+3. **API Key Issues**
+   - Confirm COHERE_API_KEY is correctly set
+   - Check for typos in the API key
+   - Verify API key has necessary permissions
+
+### Pushing to Docker Hub
+
+Use the provided script to build and push the Docker image to Docker Hub:
+
+```bash
+# Make the script executable
+chmod +x push-to-dockerhub.sh
+
+# Build and push with default tag (latest)
+./push-to-dockerhub.sh
+
+# Build and push with specific tag
+./push-to-dockerhub.sh v1.0
+```
+
+### Running the Docker Image
+
+```bash
+# Pull the image from Docker Hub
+docker pull ranga2024/poc-multiagent-rag:latest
+
+# Run the Docker image
+docker run -p 8501:8501 -e COHERE_API_KEY=your_api_key_here ranga2024/poc-multiagent-rag:latest
+```
+
 ## Features
 
 - **Multi-Agent Architecture**: Uses three specialized agents (Summarizer, Q&A, Citation Verifier) working together
@@ -9,57 +88,6 @@ An enhanced Retrieval-Augmented Generation (RAG) system using LangGraph to orche
 - **Optimized Retrieval**: Cross-document retrieval with query expansion and MMR
 - **LangGraph Orchestration**: Structured workflow for agent collaboration
 - **Interactive UI**: Streamlit-based interface with progress tracking and document management
-
-## Requirements
-
-- Python 3.10+
-- Cohere API key
-- Docker and Docker Compose (for containerized deployment)
-
-## Installation
-
-### Option 1: Local Installation
-
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd <repository-directory>
-   ```
-
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Set your Cohere API key:
-   ```
-   export COHERE_API_KEY=your_api_key_here
-   ```
-
-4. Run the application:
-   ```
-   streamlit run multi_agent_rag.py
-   ```
-
-### Option 2: Docker Deployment
-
-1. Clone the repository:
-   ```
-   git clone <repository-url>
-   cd <repository-directory>
-   ```
-
-2. Create a `.env` file with your Cohere API key:
-   ```
-   COHERE_API_KEY=your_api_key_here
-   ```
-
-3. Build and run with Docker Compose:
-   ```
-   docker-compose up -d
-   ```
-
-4. Access the application at http://localhost:8501
 
 ## Usage
 
@@ -81,27 +109,6 @@ An enhanced Retrieval-Augmented Generation (RAG) system using LangGraph to orche
 
 The LangGraph workflow orchestrates the agents in the following sequence:
 1. Document retrieval → Summarizer Agent → Q&A Agent → Citation Verifier → Final Response
-
-## Docker Configuration
-
-The application is containerized with Docker for easy deployment:
-
-- **Data Persistence**: All data (vector database, embeddings cache, uploads) is stored in a Docker volume
-- **Environment Variables**:
-  - `COHERE_API_KEY`: Your Cohere API key
-  - `DATA_DIR`: Path for data storage (defaults to `/app/data`)
-- **Port**: The application runs on port 8501
-- **Health Check**: Built-in health check at `/_stcore/health`
-
-### Customizing Docker Deployment
-
-You can customize the deployment by modifying the environment variables in docker-compose.yml:
-
-```yaml
-environment:
-  - COHERE_API_KEY=${COHERE_API_KEY}
-  - DATA_DIR=/custom/path  # Optional: change data directory
-```
 
 ## Performance Considerations
 
