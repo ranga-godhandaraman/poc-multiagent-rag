@@ -1,32 +1,37 @@
-FROM python:3.10-slim
+# Use Python 3.11 slim image as base
+FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
     git \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
-
-# Create directories for data persistence
+# Create necessary directories
 RUN mkdir -p /app/data/vector_db /app/data/temp_uploads /app/data/embeddings_cache
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV DATA_DIR=/app/data
+# Copy the application code
+COPY . .
 
-# Expose the port Streamlit runs on
+# Expose the Streamlit default port
 EXPOSE 8501
 
-# Command to run the application
-CMD ["streamlit", "run", "multi_agent_rag.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Set environment variables
+ENV DATA_DIR=/app/data
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Command to run the application with CORS enabled
+CMD ["streamlit", "run", "multi_agent_rag.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.enableCORS=true"]
