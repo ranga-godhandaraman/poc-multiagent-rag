@@ -1,6 +1,6 @@
 # Multi-Agent RAG System
 
-A sophisticated Retrieval-Augmented Generation (RAG) system using LangGraph to orchestrate multiple specialized agents for document processing and question answering.
+An enhanced Retrieval-Augmented Generation (RAG) system using LangGraph to orchestrate multiple specialized agents for document processing and question answering.
 
 ## Features
 
@@ -14,7 +14,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) system using LangGraph to o
 
 - Python 3.10+
 - Cohere API key
-- Docker and Docker Compose (optional, for containerized deployment)
+- Docker and Docker Compose (for containerized deployment)
 
 ## Installation
 
@@ -82,11 +82,26 @@ A sophisticated Retrieval-Augmented Generation (RAG) system using LangGraph to o
 The LangGraph workflow orchestrates the agents in the following sequence:
 1. Document retrieval → Summarizer Agent → Q&A Agent → Citation Verifier → Final Response
 
-## Data Persistence
+## Docker Configuration
 
-- Vector database is stored in the `vector_db` directory
-- Embedding cache is stored in the `embeddings_cache` directory
-- Both directories are mounted as volumes in Docker for persistence
+The application is containerized with Docker for easy deployment:
+
+- **Data Persistence**: All data (vector database, embeddings cache, uploads) is stored in a Docker volume
+- **Environment Variables**:
+  - `COHERE_API_KEY`: Your Cohere API key
+  - `DATA_DIR`: Path for data storage (defaults to `/app/data`)
+- **Port**: The application runs on port 8501
+- **Health Check**: Built-in health check at `/_stcore/health`
+
+### Customizing Docker Deployment
+
+You can customize the deployment by modifying the environment variables in docker-compose.yml:
+
+```yaml
+environment:
+  - COHERE_API_KEY=${COHERE_API_KEY}
+  - DATA_DIR=/custom/path  # Optional: change data directory
+```
 
 ## Performance Considerations
 
