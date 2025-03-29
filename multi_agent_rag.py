@@ -24,22 +24,12 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 # Constants
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # Better quality embedding model for improved retrieval
 
-# Check if running on Render (environment variable set by Render)
-IS_RENDER = os.getenv('RENDER', '') == 'true'
-
-# Set paths based on environment
-if IS_RENDER:
-    # Use Render disk for persistence
-    BASE_DIR = "/app/data"
-else:
-    # Use local directories in development
-    BASE_DIR = "."
-
-# Configure paths
-DB_DIR = os.path.join(BASE_DIR, "vector_db")
-TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, "temp_uploads")
-EMBEDDINGS_CACHE_DIR = os.path.join(BASE_DIR, "embeddings_cache")
-FEEDBACK_FILE = os.path.join(BASE_DIR, "feedback_log.jsonl")
+# Configure paths for data persistence
+DATA_DIR = os.getenv('DATA_DIR', '/app/data')  # Can be overridden with environment variable
+DB_DIR = os.path.join(DATA_DIR, "vector_db")
+TEMP_UPLOAD_DIR = os.path.join(DATA_DIR, "temp_uploads")
+EMBEDDINGS_CACHE_DIR = os.path.join(DATA_DIR, "embeddings_cache")
+FEEDBACK_FILE = os.path.join(DATA_DIR, "feedback_log.jsonl")
 
 # API keys
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
