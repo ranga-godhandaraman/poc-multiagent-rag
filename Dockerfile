@@ -25,9 +25,13 @@ RUN mkdir -p /app/data/vector_db /app/data/temp_uploads /app/data/embeddings_cac
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV DATA_DIR=/app/data
 
 # Expose the port Streamlit runs on
 EXPOSE 8501
+
+# Set up volumes for data persistence
+VOLUME ["/app/data"]
 
 # Health check
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
