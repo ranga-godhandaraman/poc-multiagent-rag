@@ -21,11 +21,11 @@ from langgraph.prebuilt import ToolNode
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
-# Constants
-EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # Better quality embedding model for improved retrieval
+#embedding model
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
-# Configure paths for data persistence
-DATA_DIR = os.getenv('DATA_DIR', '/app/data')  # Can be overridden with environment variable
+# Configuring paths for data persistence
+DATA_DIR = os.getenv('DATA_DIR', '/app/data')
 DB_DIR = os.path.join(DATA_DIR, "vector_db")
 TEMP_UPLOAD_DIR = os.path.join(DATA_DIR, "temp_uploads")
 EMBEDDINGS_CACHE_DIR = os.path.join(DATA_DIR, "embeddings_cache")
@@ -40,7 +40,7 @@ CHUNK_SIZE = 500  # Smaller chunks for more granular retrieval
 CHUNK_OVERLAP = 150  # Increased overlap to maintain context
 DEFAULT_RETRIEVE_COUNT = 6  # Retrieve more documents by default
 
-# Define the state for our multi-agent system
+# Defining the state for our multi-agent system
 class AgentState(TypedDict):
     """State for the multi-agent system."""
     query: str
@@ -51,7 +51,7 @@ class AgentState(TypedDict):
     final_response: Optional[str]
     error: Optional[str]
 
-# Setup Vector DB with enhanced embedding and retrieval capabilities
+# Setup for Vector DB 
 def initialize_vector_db():
     """
     Initialize the vector database with optimized settings for better cross-document retrieval
@@ -59,34 +59,32 @@ def initialize_vector_db():
     Returns:
         Configured Chroma vector store
     """
-    # Create the directory if it doesn't exist
     os.makedirs(DB_DIR, exist_ok=True)
 
-    # Initialize embeddings with advanced model and normalization
+    # Initialize embeddings 
     embedding = HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL,
-        cache_folder=EMBEDDINGS_CACHE_DIR,  # Cache embeddings in persistent location
+        cache_folder=EMBEDDINGS_CACHE_DIR,
         encode_kwargs={
             'batch_size': BATCH_SIZE,
-            'normalize_embeddings': True  # Normalize for better similarity search
+            'normalize_embeddings': True
         },
         model_kwargs={
-            'device': 'cpu'  # Explicitly set device for consistent behavior
+            'device': 'cpu'
         }
     )
 
-    # Initialize Chroma with optimized settings for better retrieval
+    # Initialize Chroma
     try:
         vector_store = Chroma(
             persist_directory=DB_DIR,
             embedding_function=embedding,
             collection_name="documents",
-            collection_metadata={"hnsw:space": "cosine"}  # Use cosine similarity for better matching
+            collection_metadata={"hnsw:space": "cosine"}  # cosinr similarity
         )
         return vector_store
     except Exception as e:
         st.error(f"Error initializing vector database: {str(e)}")
-        # Create a new collection if there was an error
         return Chroma(
             persist_directory=DB_DIR,
             embedding_function=embedding,
@@ -108,27 +106,22 @@ def ingest_documents(files):
     docs = []
     os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
-    # Create a text splitter with optimized settings for faster processing
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,  # Smaller chunks for faster processing
-        chunk_overlap=CHUNK_OVERLAP,  # Reduced overlap for efficiency
+        chunk_size=CHUNK_SIZE, 
+        chunk_overlap=CHUNK_OVERLAP, 
         length_function=len,
     )
 
     for file in files:
-        # Create a safe filename to avoid any path issues
         safe_filename = "".join([c for c in file.name if c.isalnum() or c in "._- "]).rstrip()
         temp_path = os.path.join(TEMP_UPLOAD_DIR, safe_filename)
-
-        # Save the file temporarily
         with open(temp_path, "wb") as f:
             f.write(file.getbuffer())
 
         try:
             if file.name.lower().endswith('.pdf'):
-                # Use PyMuPDFLoader for PDFs - better multi-page support
+                # Using PyMuPDFLoader for PDFs 
                 loader = PyMuPDFLoader(temp_path)
-                # Load the document
                 loaded_docs = loader.load()
 
                 # Split the document into chunks if it's large
@@ -139,54 +132,42 @@ def ingest_documents(files):
                         doc.metadata['source'] = file.name
                         doc.metadata['page'] = i + 1
                         doc.metadata['file_type'] = 'pdf'
-
-                        # Always split pages into smaller chunks for better retrieval
-                        # This ensures we can retrieve specific sections rather than entire pages
                         split_docs = text_splitter.split_documents([doc])
 
                         # If the page was split into multiple chunks
                         if len(split_docs) > 1:
-                            # Add detailed section information to each chunk
                             for j, split_doc in enumerate(split_docs):
                                 split_doc.metadata['page'] = i + 1
                                 split_doc.metadata['section'] = j + 1
                                 split_doc.metadata['total_sections'] = len(split_docs)
-                                # Add document title or filename without extension for better citation
                                 split_doc.metadata['title'] = os.path.splitext(file.name)[0]
                             docs.extend(split_docs)
                         else:
-                            # Even for single chunks, add consistent metadata
                             doc.metadata['section'] = 1
                             doc.metadata['total_sections'] = 1
                             doc.metadata['title'] = os.path.splitext(file.name)[0]
                             docs.append(doc)
                 else:
-                    # Handle empty PDFs
+                    # Handling empty PDFs
                     empty_doc = Document(
                         page_content="[This PDF appears to be empty or could not be processed]",
                         metadata={'source': file.name, 'page': 'N/A', 'file_type': 'pdf'}
                     )
                     docs.append(empty_doc)
-
+                    
+            # doing the same for Text files also
             else:
-                # Use TextLoader for text files
                 loader = TextLoader(temp_path)
                 loaded_docs = loader.load()
-
-                # Process text files - split into manageable chunks
                 if loaded_docs:
                     split_docs = text_splitter.split_documents(loaded_docs)
-
-                    # Add enhanced metadata to each chunk for better retrieval and citation
                     for i, doc in enumerate(split_docs):
                         doc.metadata['source'] = file.name
                         doc.metadata['chunk'] = i + 1
                         doc.metadata['file_type'] = 'txt'
                         doc.metadata['total_chunks'] = len(split_docs)
                         doc.metadata['title'] = os.path.splitext(file.name)[0]
-                        # Add content hash for deduplication potential
                         doc.metadata['content_hash'] = hash(doc.page_content) % 10000000
-                        # Add approximate position in document (beginning, middle, end)
                         position = i / len(split_docs)
                         if position < 0.33:
                             doc.metadata['position'] = 'beginning'
@@ -205,7 +186,6 @@ def ingest_documents(files):
                     docs.append(empty_doc)
 
         except Exception as e:
-            # Add an error document so the user knows something went wrong
             error_doc = Document(
                 page_content=f"[Error processing file: {str(e)}]",
                 metadata={'source': file.name, 'error': str(e)}
@@ -228,17 +208,14 @@ def index_documents(vector_store, docs):
         vector_store: The vector database
         docs: List of documents to index
     """
-    # Get all existing document IDs
     if hasattr(vector_store, "_collection") and vector_store._collection is not None:
         try:
-            # Get all IDs if there are any documents
             ids = vector_store._collection.get()["ids"]
             if ids:
                 vector_store.delete(ids=ids)
                 st.info(f"Cleared {len(ids)} previous document chunks from the database.")
         except Exception as e:
             st.warning(f"Could not clear previous documents: {str(e)}. Creating a new collection.")
-            # If we can't get the IDs, recreate the collection
             vector_store = initialize_vector_db()
 
     # Perform basic deduplication to avoid redundant chunks
@@ -246,46 +223,33 @@ def index_documents(vector_store, docs):
     content_hashes = set()
 
     for doc in docs:
-        # Create a simple hash of the content
         content_hash = hash(doc.page_content) % 10000000
-
-        # Only add if we haven't seen this exact content before
         if content_hash not in content_hashes:
             content_hashes.add(content_hash)
-            # Add the hash to metadata for future reference
             doc.metadata['content_hash'] = content_hash
             unique_docs.append(doc)
 
     st.info(f"Removed {len(docs) - len(unique_docs)} duplicate chunks, indexing {len(unique_docs)} unique chunks.")
 
-    # Add document IDs for better tracking
+    # Adding document IDs for better tracking
     for i, doc in enumerate(unique_docs):
-        # Generate a unique ID based on content and metadata
         doc_id = str(uuid.uuid4())
         doc.metadata['doc_id'] = doc_id
 
-    # Add new documents in optimized batches with progress tracking
     progress_text = st.empty()
     progress_bar = st.progress(0)
 
     for i in range(0, len(unique_docs), BATCH_SIZE):
-        # Update progress
         progress_percentage = min(1.0, i / len(unique_docs))
         progress_bar.progress(progress_percentage)
         progress_text.text(f"Indexing documents: {i}/{len(unique_docs)} ({int(progress_percentage*100)}%)")
 
-        # Process batch
         batch = unique_docs[i:i + BATCH_SIZE]
-
-        # Add documents with explicit IDs for better retrieval
         ids = [doc.metadata.get('doc_id') for doc in batch]
         vector_store.add_documents(batch, ids=ids)
-
-        # Persist after each batch to avoid memory issues with large document sets
         if i % (BATCH_SIZE * 2) == 0 and i > 0:
             vector_store.persist()
 
-    # Final progress update
     progress_bar.progress(1.0)
     progress_text.text(f"Indexing complete: {len(unique_docs)} documents processed")
 
@@ -294,7 +258,7 @@ def index_documents(vector_store, docs):
 
     return len(unique_docs)
 
-# Enhanced document retrieval with multi-query expansion and MMR
+# Enhanced document retrieval with multi-query expansion 
 def retrieve_documents(vector_store, query, k=None):
     """
     Enhanced retrieval of relevant documents across multiple sources
@@ -310,7 +274,6 @@ def retrieve_documents(vector_store, query, k=None):
     if k is None:
         k = DEFAULT_RETRIEVE_COUNT
 
-    # Generate query variations to improve retrieval
     query_variations = generate_query_variations(query)
 
     # Use MMR retrieval to get diverse results
@@ -318,8 +281,8 @@ def retrieve_documents(vector_store, query, k=None):
         search_type="mmr",  # Maximum Marginal Relevance
         search_kwargs={
             "k": k,
-            "fetch_k": k * 3,  # Fetch more documents initially for diversity
-            "lambda_mult": 0.7  # Balance between relevance and diversity
+            "fetch_k": k * 3,
+            "lambda_mult": 0.7  
         }
     )
 
@@ -328,15 +291,12 @@ def retrieve_documents(vector_store, query, k=None):
         search_type="similarity",
         search_kwargs={"k": k}
     )
-
-    # Retrieve documents using both methods
     all_docs = []
 
     # First, try MMR with the original query
     mmr_docs = mmr_retriever.get_relevant_documents(query)
     all_docs.extend(mmr_docs)
 
-    # Then try with query variations to get more diverse results
     for variation in query_variations:
         # Use similarity search for variations to get more coverage
         variation_docs = similarity_retriever.get_relevant_documents(variation)
@@ -347,32 +307,25 @@ def retrieve_documents(vector_store, query, k=None):
     seen_content = set()
 
     for doc in all_docs:
-        # Create a simple hash of the content
         content_hash = hash(doc.page_content) % 10000000
 
         if content_hash not in seen_content:
             seen_content.add(content_hash)
             unique_docs.append(doc)
-
-            # Limit to k unique documents
+            
             if len(unique_docs) >= k * 2:
                 break
 
-    # Sort by relevance to original query (approximate by checking if query terms are in the document)
+    # Sort by relevance to original query
     query_terms = set(query.lower().split())
 
     def relevance_score(doc):
         content = doc.page_content.lower()
-        # Count how many query terms appear in the document
         term_matches = sum(1 for term in query_terms if term in content)
-        # Boost documents that have more query terms
         return term_matches
 
-    # Sort by relevance score
     unique_docs.sort(key=relevance_score, reverse=True)
-
-    # Return the top k documents
-    return unique_docs[:k]
+    return unique_docs[:k] # Return the top k documents
 
 # Generate query variations to improve retrieval
 def generate_query_variations(query):
@@ -386,17 +339,9 @@ def generate_query_variations(query):
         List of query variations
     """
     variations = []
-
-    # Add the original query with "about" prefix
     variations.append(f"about {query}")
-
-    # Add a variation asking for information
     variations.append(f"information about {query}")
-
-    # Add a variation with "explain" prefix
     variations.append(f"explain {query}")
-
-    # Extract potential keywords (simple approach)
     words = query.split()
     if len(words) > 3:
         # For longer queries, create a keywords-only version
@@ -420,14 +365,12 @@ def summarizer_agent(state: AgentState) -> AgentState:
         Updated state with summary
     """
     try:
-        # Extract documents and query from state
         documents = state["documents"]
         query = state["query"]
         
         if not documents:
             return {**state, "summary": "No relevant documents found.", "error": "No documents to summarize"}
         
-        # Combine document content
         combined_content = "\n\n".join([f"Document {i+1} (Source: {doc.metadata.get('source', 'Unknown')}): {doc.page_content}" 
                                       for i, doc in enumerate(documents)])
         
@@ -450,7 +393,6 @@ def summarizer_agent(state: AgentState) -> AgentState:
             template=prompt_template
         )
         
-        # Create LLM chain for summarization
         llm = Cohere(
             model="command-xlarge",
             temperature=0.1,
@@ -461,8 +403,7 @@ def summarizer_agent(state: AgentState) -> AgentState:
         
         # Generate summary
         summary = chain.run(documents=combined_content, query=query)
-        
-        # Return updated state
+
         return {**state, "summary": summary}
     except Exception as e:
         return {**state, "error": f"Error in summarizer agent: {str(e)}"}
@@ -479,7 +420,6 @@ def qa_agent(state: AgentState) -> AgentState:
         Updated state with answer
     """
     try:
-        # Extract data from state
         documents = state["documents"]
         summary = state["summary"]
         query = state["query"]
@@ -487,7 +427,7 @@ def qa_agent(state: AgentState) -> AgentState:
         if not documents:
             return {**state, "answer": "I don't have enough information to answer this question."}
         
-        # Create a prompt for Q&A
+        # prompt for Q&A
         prompt_template = """
         You are a helpful assistant answering questions based on the provided documents.
         
@@ -512,12 +452,10 @@ def qa_agent(state: AgentState) -> AgentState:
             template=prompt_template
         )
         
-        # Combine document content
         combined_content = "\n\n".join([f"Document {i+1} (Source: {doc.metadata.get('source', 'Unknown')}, "
                                        f"Page: {doc.metadata.get('page', 'N/A')}): {doc.page_content}" 
                                       for i, doc in enumerate(documents)])
         
-        # Create LLM chain for Q&A
         llm = Cohere(
             model="command-xlarge",
             temperature=0.1,
@@ -525,11 +463,8 @@ def qa_agent(state: AgentState) -> AgentState:
         )
         
         chain = LLMChain(llm=llm, prompt=prompt)
-        
-        # Generate answer
         answer = chain.run(documents=combined_content, summary=summary, query=query)
-        
-        # Return updated state
+
         return {**state, "answer": answer}
     except Exception as e:
         return {**state, "error": f"Error in Q&A agent: {str(e)}"}
@@ -546,7 +481,6 @@ def citation_verifier_agent(state: AgentState) -> AgentState:
         Updated state with verified answer and citations
     """
     try:
-        # Extract data from state
         documents = state["documents"]
         answer = state["answer"]
         query = state["query"]
@@ -554,7 +488,7 @@ def citation_verifier_agent(state: AgentState) -> AgentState:
         if not documents or not answer:
             return {**state, "citations": [], "final_response": state.get("answer", "")}
         
-        # Create a prompt for citation verification
+        # prompt for citation verification
         prompt_template = """
         You are a citation verifier. Your task is to verify the following answer against the source documents
         and add proper citations.
@@ -580,12 +514,10 @@ def citation_verifier_agent(state: AgentState) -> AgentState:
             template=prompt_template
         )
         
-        # Combine document content with detailed metadata
         combined_content = "\n\n".join([f"Document {i+1} - Source: {doc.metadata.get('source', 'Unknown')}, "
                                        f"Page: {doc.metadata.get('page', 'N/A')}: {doc.page_content}" 
                                       for i, doc in enumerate(documents)])
         
-        # Create LLM chain for verification
         llm = Cohere(
             model="command-xlarge",
             temperature=0.1,
@@ -594,10 +526,8 @@ def citation_verifier_agent(state: AgentState) -> AgentState:
         
         chain = LLMChain(llm=llm, prompt=prompt)
         
-        # Generate verified answer
         verified_answer = chain.run(documents=combined_content, answer=answer, query=query)
         
-        # Extract citations (simplified approach)
         citations = []
         for doc in documents:
             source = doc.metadata.get('source', 'Unknown')
@@ -608,8 +538,7 @@ def citation_verifier_agent(state: AgentState) -> AgentState:
                     'page': page,
                     'content_preview': doc.page_content[:100] + "..."
                 })
-        
-        # Return updated state
+
         return {
             **state, 
             "citations": citations,
@@ -629,23 +558,23 @@ def create_agent_workflow():
     Returns:
         A compiled workflow that can be executed
     """
-    # Create a new graph
+    # Created a new graph
     workflow = StateGraph(AgentState)
     
-    # Add nodes for each agent
+    # Added nodes for each agent
     workflow.add_node("summarizer", summarizer_agent)
     workflow.add_node("qa", qa_agent)
     workflow.add_node("citation_verifier", citation_verifier_agent)
     
-    # Define the edges (flow) between nodes
+    # Defineed the edges (flow) between nodes
     workflow.add_edge("summarizer", "qa")
     workflow.add_edge("qa", "citation_verifier")
     workflow.add_edge("citation_verifier", END)
     
-    # Set the entry point
+    # entry point
     workflow.set_entry_point("summarizer")
     
-    # Compile the workflow
+    # Compiling the workflow
     return workflow.compile()
 
 # Enhanced query processing with improved retrieval and agent orchestration
@@ -661,19 +590,14 @@ def process_query_with_agents(vector_store, query):
         Final response and citations with source information
     """
     try:
-        # Start timing for performance tracking
         start_time = time.time()
-
-        # Retrieve relevant documents with enhanced retrieval
         documents = retrieve_documents(vector_store, query)
 
-        # Log retrieval time
         retrieval_time = time.time() - start_time
 
         if not documents:
             return "No relevant documents found to answer your question. Please try rephrasing your query or upload more documents.", []
 
-        # Log document sources for debugging
         doc_sources = {}
         for doc in documents:
             source = doc.metadata.get('source', 'Unknown')
@@ -695,26 +619,18 @@ def process_query_with_agents(vector_store, query):
             final_response=None,
             error=None
         )
-
-        # Create and run the workflow
         workflow = create_agent_workflow()
 
-        # Execute the workflow with timing
         with st.spinner("Processing with multiple agents..."):
             result = workflow.invoke(initial_state)
 
-        # Calculate total processing time
         total_time = time.time() - start_time
-
-        # Check for errors
         if result.get("error"):
             return f"An error occurred: {result['error']}", []
 
-        # Extract the final response and citations
         final_response = result.get("final_response", "No response generated.")
         citations = result.get("citations", [])
 
-        # Format citations for display with more details
         formatted_citations = []
         for cite in citations:
             source = cite.get('source', 'Unknown')
@@ -728,7 +644,6 @@ def process_query_with_agents(vector_store, query):
 
             formatted_citations.append(f"Source: {source} ({page_info})")
 
-        # Add performance metrics to the response
         performance_note = f"\n\n_Query processed in {total_time:.2f} seconds (retrieval: {retrieval_time:.2f}s)_"
 
         return final_response + performance_note, formatted_citations
@@ -741,10 +656,10 @@ def main():
     st.title("AI-Powered Document Assistant - A POC to Middleware")
     st.markdown("### Multi-Agent RAG System")
     
-    # Initialize vector database at startup
+    # DB initialization
     vector_db = initialize_vector_db()
     
-    # Initialize session state
+    # session state initialize 
     if 'responses' not in st.session_state:
         st.session_state.responses = []  # List to store all Q&A pairs
     
@@ -752,7 +667,6 @@ def main():
     st.markdown("### Upload Documents")
     st.markdown("Upload up to 5 PDF or TXT files (multi-page documents supported)")
     
-    # Create a container for the uploader with custom styling
     upload_container = st.container()
     with upload_container:
         uploaded_files = st.file_uploader(
@@ -764,17 +678,14 @@ def main():
     
     # Display information about uploaded files
     if uploaded_files:
-        # Check if we have too many files
         if len(uploaded_files) > 5:
             st.warning(f"You've uploaded {len(uploaded_files)} files. Only the first 5 will be processed.")
             uploaded_files = uploaded_files[:5]
         
-        # Show file information
         st.markdown("### Uploaded Files:")
         for i, file in enumerate(uploaded_files):
             file_size = round(file.size / 1024, 1)  # Convert to KB
             
-            # Get file extension and show appropriate icon
             if file.name.endswith('.pdf'):
                 icon = "📄"
             else:
@@ -782,30 +693,23 @@ def main():
                 
             st.markdown(f"{i+1}. {icon} **{file.name}** ({file_size} KB)")
         
-        # Process button with progress tracking
         if st.button("Process Documents", key="process_docs"):
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # First update - starting
             status_text.text("Starting document processing...")
             progress_bar.progress(0.1)  # Use float values between 0 and 1
 
             try:
-                # Second update - ingesting
                 status_text.text("Ingesting documents...")
                 documents = ingest_documents(uploaded_files)
                 progress_bar.progress(0.5)  # 50%
 
-                # Third update - indexing (we'll let the indexing function handle its own progress)
                 status_text.text("Indexing documents for search...")
                 doc_count = index_documents(vector_db, documents)
 
-                # Final update
                 status_text.text("Finalizing...")
                 progress_bar.progress(1.0)  # 100%
-
-                # Success message with document count
                 st.success(f"Successfully processed {len(uploaded_files)} documents with a total of {doc_count} unique chunks!")
 
                 # Clear status elements
@@ -826,23 +730,19 @@ def main():
                 st.markdown(f"**Q: {response['query']}**")
                 st.markdown(f"{response['response']}")
                 
-                # Display sources if available
                 if response['sources']:
                     with st.expander("View Sources"):
                         for source in response['sources']:
                             st.markdown(f"- {source}")
                 
-                # Add a divider between responses
                 if i < len(st.session_state.responses) - 1:
                     st.markdown("---")
         
-        # Add a button to clear history
         if st.button("Clear History", key="clear_history"):
             st.session_state.responses = []
             st.rerun()
         st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
     
-    # Always show a single input box at the bottom
     with st.form(key='query_form', clear_on_submit=True):
         query = st.text_input("Ask a question about your documents")
         submit_button = st.form_submit_button("Ask")
@@ -850,10 +750,8 @@ def main():
         if submit_button and query:
             try:
                 with st.spinner('Processing your query with multiple agents...'):
-                    # Process the query using the multi-agent system
                     response, sources = process_query_with_agents(vector_db, query)
                     
-                    # Add to responses
                     st.session_state.responses.append({
                         'query': query,
                         'response': response,
@@ -861,13 +759,14 @@ def main():
                         'feedback': None,
                         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                     })
-                    st.rerun()  # Rerun to show the new response
+                    st.rerun()  
             except Exception as e:
                 st.error(f"Error processing query: {str(e)}")
     
     # Show a message if no documents are uploaded
     if not uploaded_files:
         st.info("Please upload documents to start asking questions.")
-
+        
+# main entry point
 if __name__ == "__main__":
     main()
