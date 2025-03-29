@@ -6,7 +6,6 @@ services:
     plan: standard
     region: oregon  # Choose a region (options: oregon, ohio, frankfurt, singapore)
     healthCheckPath: /_stcore/health
-    healthCheckTimeout: 10
     envVars:
       - key: RENDER
         value: true
